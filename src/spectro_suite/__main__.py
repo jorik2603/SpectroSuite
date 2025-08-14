@@ -1,19 +1,35 @@
 import tkinter as tk
-from spectro_suite.core import SpectroscopyGUI
-from spectro_suite.dialog import ModeSelectionDialog
+# from spectro_suite.dialog import ModeSelectionDialog
+# from spectro_suite.view_mode import ViewModeGUI
+# from spectro_suite.compare_two_mode import CompareTwoGUI
+# from spectro_suite.compare_multi_mode import CompareMultiGUI
+
+from dialog import ModeSelectionDialog
+from view_mode import ViewModeGUI
+from compare_two_mode import CompareTwoGUI
+from compare_multi_mode import CompareMultiGUI
 
 def main():
     """Main function to run the application."""
     root = tk.Tk()
-    # Commented out because program will not load with this enabled. Fix this later
-    # root.withdraw() 
+    #root.withdraw() 
     
     dialog = ModeSelectionDialog(root)
     mode = dialog.mode
 
     if mode:
-        root.deiconify() 
-        app = SpectroscopyGUI(root, mode)
+        root.deiconify()
+        
+        if mode == "view":
+            app = ViewModeGUI(root, mode)
+        elif mode == "compare_two":
+            app = CompareTwoGUI(root, mode)
+        elif mode == "compare_multi":
+            app = CompareMultiGUI(root, mode)
+        else:
+            root.destroy()
+            return
+            
         root.mainloop()
     else:
         root.destroy()
