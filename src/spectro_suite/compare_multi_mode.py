@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import ttk
-#from .base_gui import BaseSpectroscopyGUI
 from base_gui import BaseSpectroscopyGUI
 
 class CompareMultiGUI(BaseSpectroscopyGUI):
@@ -10,7 +9,8 @@ class CompareMultiGUI(BaseSpectroscopyGUI):
     def _create_file_loading_controls(self, parent_frame):
         ttk.Label(parent_frame, text="Data Loading", font="-weight bold").pack(anchor='w')
         for i in range(1, 5):
-            ttk.Button(parent_frame, text=f"Load Dataset {i}", command=lambda: self.load_data(i)).pack(pady=2, fill=tk.X)
+            # The fix is in the line below
+            ttk.Button(parent_frame, text=f"Load Dataset {i}", command=lambda i=i: self.load_data(i)).pack(pady=2, fill=tk.X)
         self._add_common_norm_controls(parent_frame)
 
     def initial_plot_setup(self):
