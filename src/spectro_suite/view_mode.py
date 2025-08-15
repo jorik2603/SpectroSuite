@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from base_gui import BaseSpectroscopyGUI
+from spectro_suite.base_gui import BaseSpectroscopyGUI
 
 class ViewModeGUI(BaseSpectroscopyGUI):
     def __init__(self, root, mode):
