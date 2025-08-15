@@ -1,9 +1,13 @@
 import tkinter as tk
-from spectro_suite.dialog import ModeSelectionDialog
-from spectro_suite.view_mode import ViewModeGUI
-from spectro_suite.compare_two_mode import CompareTwoGUI
-from spectro_suite.compare_multi_mode import CompareMultiGUI
+# from spectro_suite.dialog import ModeSelectionDialog
+# from spectro_suite.view_mode import ViewModeGUI
+# from spectro_suite.compare_two_mode import CompareTwoGUI
+# from spectro_suite.compare_multi_mode import CompareMultiGUI
 
+from dialog import ModeSelectionDialog
+from view_mode import ViewModeGUI
+from compare_two_mode import CompareTwoGUI
+from compare_multi_mode import CompareMultiGUI
 def main():
     """Main function to run the application."""
     root = tk.Tk()

@@ -19,8 +19,9 @@ class DacLoader(DataLoader):
         with open(filepath, 'r') as f:
             lines = f.readlines()
 
-        # First line is the wavelength axis
-        wavelengths = np.array(lines[0].strip().split('\t')[1:], dtype=float)
+        # First line is the wavelength axis. We need to average the pairs.
+        raw_wavelengths = np.array(lines[0].strip().split('\t')[1:], dtype=float)
+        wavelengths = (raw_wavelengths[::2] + raw_wavelengths[1::2]) / 2.0
 
         # Subsequent lines are the time and intensity data
         time_data = []
@@ -39,5 +40,11 @@ class DacLoader(DataLoader):
         x_axis = wavelengths
         y_axis = np.array(time_data)
         z_data = np.array(intensity_data)
+
+        # Ensure the dimensions of the final data are consistent
+        if z_data.shape[1] != len(x_axis):
+             raise ValueError("The number of wavelength points does not match the number of intensity data points.")
+        if z_data.shape[0] != len(y_axis):
+            raise ValueError("The number of time points does not match the number of intensity data rows.")
 
         return x_axis, y_axis, z_data
