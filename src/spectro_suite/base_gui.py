@@ -149,8 +149,19 @@ class BaseSpectroscopyGUI:
         self.canvas_slices.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
     def load_data(self, dataset_num):
-        filepath = filedialog.askopenfilename(filetypes=(("Supported Files", "*.dat *.txt *.npy *.csv"), ("All files", "*.*")))
-        if not filepath: return
+        filepath = filedialog.askopenfilename(
+            title="Select a data file",
+            filetypes=(
+                ("DAT files", "*.dat"),
+                ("NPY files", "*.npy"),
+                ("Text files", "*.txt"),
+                ("CSV files", "*.csv"),
+                ("DAC files", "*.dac"),
+                ("All files", "*.*")
+            )
+        )
+        if not filepath:
+            return
         try:
             from data_loaders import get_loader
             loader = get_loader(filepath)
