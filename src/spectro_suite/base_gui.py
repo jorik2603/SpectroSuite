@@ -36,6 +36,10 @@ class BaseSpectroscopyGUI:
         self._create_controls_panel()
         self._create_plot_canvases()
         self.initial_plot_setup()
+        
+        # --- NEW: Attributes to cache the state of data processing settings ---
+        self._last_norm_settings = None
+        self._last_bg_settings = None
 
     def _create_controls_panel(self):
         main_controls_frame = ttk.LabelFrame(self.root, text="Plotting Controls", padding=10)
@@ -127,8 +131,24 @@ class BaseSpectroscopyGUI:
         self.wave_max_var = tk.StringVar(value='812')
         ttk.Entry(parent_frame, textvariable=self.wave_max_var, width=8).grid(row=4, column=1)
         
+        # --- NEW: Background Subtraction Controls ---
+        bg_frame = ttk.LabelFrame(parent_frame, text="Background Subtraction")
+        bg_frame.grid(row=5, column=0, columnspan=2, pady=(10,0), sticky='ew')
+
+        self.bg_subtract_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bg_frame, text="Enable", variable=self.bg_subtract_var).grid(row=0, column=0, columnspan=2, sticky='w', padx=5)
+
+        ttk.Label(bg_frame, text="BG Min:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        self.bg_time_min_var = tk.StringVar(value='-1.0')
+        ttk.Entry(bg_frame, textvariable=self.bg_time_min_var, width=8).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+
+        ttk.Label(bg_frame, text="BG Max:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        self.bg_time_max_var = tk.StringVar(value='0.0')
+        ttk.Entry(bg_frame, textvariable=self.bg_time_max_var, width=8).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+
         offset_frame = ttk.LabelFrame(parent_frame, text="Time Offsets (ps)")
-        offset_frame.grid(row=5, column=0, columnspan=2, pady=(10,0))
+        # --- MODIFIED: Grid row index updated due to new controls ---
+        offset_frame.grid(row=6, column=0, columnspan=2, pady=(10,0))
         self.time_offset_vars = {}
         for i in range(1, 5):
             self.time_offset_vars[i] = tk.StringVar(value='0.0')
@@ -148,6 +168,20 @@ class BaseSpectroscopyGUI:
         NavigationToolbar2Tk(self.canvas_slices, canvas_frame)
         self.canvas_slices.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
+    def _processing_settings_changed(self):
+        """Check if data processing settings have changed since the last update."""
+        current_norm_settings = self.norm_type_var.get()
+        current_bg_settings = (
+            self.bg_subtract_var.get(),
+            self.bg_time_min_var.get(),
+            self.bg_time_max_var.get()
+        )
+
+        if current_norm_settings != self._last_norm_settings or \
+           current_bg_settings != self._last_bg_settings:
+            return True
+        return False
+    
     def load_data(self, dataset_num):
         filepath = filedialog.askopenfilename(
             title="Select a data file",
@@ -166,29 +200,61 @@ class BaseSpectroscopyGUI:
             from data_loaders import get_loader
             loader = get_loader(filepath)
             x_axis, y_axis, data = loader.load(filepath)
-            
-            norm_type = self.norm_type_var.get()
-            if norm_type != "None":
-                if norm_type == "Normalize to Max":
-                    max_val = data.max()
-                    if max_val != 0: data = data / max_val
-                else:
-                    min_val, max_val = data.min(), data.max()
-                    range_val = max_val - min_val
-                    if range_val > 0:
-                        if norm_type == "Full Range [-1, 1]": data = 2 * (data - min_val) / range_val - 1
-                        elif norm_type == "Full Range [0, 1]": data = (data - min_val) / range_val
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load or normalize file: {e}"); return
+            messagebox.showerror("Error", f"Failed to load file: {e}"); return
         
-        self.datasets[dataset_num] = {'data': data, 'x_axis': x_axis, 'y_axis': y_axis}
-
+        # Store original data and a working copy separately
+        self.datasets[dataset_num] = {
+            'data': np.copy(data), # The working copy that gets processed and plotted
+            'original_data': data, # The pristine, untouched data
+            'x_axis': x_axis,
+            'y_axis': y_axis
+        }
+        
         if len(self.datasets) == 1:
             self.slider_y.config(to=data.shape[0] - 1)
             self.slider_x.config(to=data.shape[1] - 1)
             self._on_entry_change('y'); self._on_entry_change('x')
         self.update_plots()
 
+    def _apply_background_subtraction(self, data, y_axis):
+        """Applies background subtraction to the data based on UI settings."""
+        if self.bg_subtract_var.get():
+            try:
+                bg_min = float(self.bg_time_min_var.get())
+                bg_max = float(self.bg_time_max_var.get())
+                if bg_min < bg_max:
+                    bg_indices = np.where((y_axis >= bg_min) & (y_axis <= bg_max))[0]
+                    if len(bg_indices) > 0:
+                        background = data[bg_indices, :].mean(axis=0)
+                        return data - background
+            except (ValueError, KeyError):
+                pass # Silently ignore errors from invalid UI input
+        return data
+
+    def _apply_normalization(self, data):
+        """Applies normalization to the data based on UI settings."""
+        norm_type = self.norm_type_var.get()
+        if norm_type == "None":
+            return data
+        
+        # Make a copy to avoid modifying the original data array in place
+        data_to_norm = np.copy(data)
+
+        if norm_type == "Normalize to Max":
+            max_val = data_to_norm.max()
+            if max_val != 0:
+                return data_to_norm / max_val
+        else:
+            min_val, max_val = data_to_norm.min(), data_to_norm.max()
+            range_val = max_val - min_val
+            if range_val > 0:
+                if norm_type == "Full Range [-1, 1]":
+                    return 2 * (data_to_norm - min_val) / range_val - 1
+                elif norm_type == "Full Range [0, 1]":
+                    return (data_to_norm - min_val) / range_val
+        return data # Return original data if normalization failed
+    
     def initial_plot_setup(self):
         raise NotImplementedError("This method must be implemented by a subclass.")
 
@@ -222,11 +288,34 @@ class BaseSpectroscopyGUI:
     def update_plots(self, *args):
         if not self.datasets:
             self.initial_plot_setup(); return
+
+        # --- MODIFIED: Only re-process data if settings have changed ---
+        if self._processing_settings_changed():
+            # Apply data processing dynamically on each update
+            for key in self.datasets:
+                dset = self.datasets[key]
+                # Start with a fresh copy of the original data
+                processed_data = np.copy(dset['original_data'])
+                
+                # Chain the processing functions
+                processed_data = self._apply_background_subtraction(processed_data, dset['y_axis'])
+                processed_data = self._apply_normalization(processed_data)
+                
+                # Store the newly processed data for the plotting functions to use
+                dset['data'] = processed_data
+            
+            # --- NEW: Update the cached settings after processing ---
+            self._last_norm_settings = self.norm_type_var.get()
+            self._last_bg_settings = (
+                self.bg_subtract_var.get(),
+                self.bg_time_min_var.get(),
+                self.bg_time_max_var.get()
+            )
         
-        # --- FIX: Clear the entire figure and recreate subplots on every update ---
+        # Clear the entire figure and recreate subplots on every update --- To prevent colorbar from duplicating
         self.fig_2d.clear()
         share_kwargs = {'sharex': True, 'sharey': True}
-        if self.mode == 'view':
+        if self.mode == 'view' or self.mode == 'fft': # Added fft mode here
             self.subplot_axes = [self.fig_2d.add_subplot(1, 1, 1)]
         elif self.mode == 'compare_two':
             self.subplot_axes = self.fig_2d.subplots(1, 2, **share_kwargs).flatten()
