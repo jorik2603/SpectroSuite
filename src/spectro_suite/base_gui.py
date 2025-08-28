@@ -44,125 +44,160 @@ class BaseSpectroscopyGUI:
     def _create_controls_panel(self):
         main_controls_frame = ttk.LabelFrame(self.root, text="Plotting Controls", padding=10)
         main_controls_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+
+        # --- RESTRUCTURED: Use a consistent grid layout to prevent manager conflicts ---
+        # Configure the grid columns to space out the control groups
+        main_controls_frame.grid_columnconfigure(0, weight=1)
+        main_controls_frame.grid_columnconfigure(1, weight=1)
+        main_controls_frame.grid_columnconfigure(2, weight=1)
+        main_controls_frame.grid_columnconfigure(3, weight=1)
+        main_controls_frame.grid_columnconfigure(4, weight=1)
+        main_controls_frame.grid_columnconfigure(5, weight=1)
+        main_controls_frame.grid_columnconfigure(6, weight=1)
+        main_controls_frame.grid_columnconfigure(7, weight=1)
         
-        file_frame = ttk.Frame(main_controls_frame)
+        # --- Group 1: Loading & Processing ---
+        loading_frame = ttk.Frame(main_controls_frame)
+        loading_frame.grid(row=0, column=0, sticky='ns', padx=(0, 10))
+        self._create_file_loading_controls(loading_frame) # Subclasses use .pack() here, which is fine inside their own frame
+              
+        # --- Group 2: Processing Controls ---
+        processing_frame = ttk.Frame(main_controls_frame)
+        processing_frame.grid(row=0, column=1, sticky='ns', padx=10)
+        bg_frame = ttk.LabelFrame(processing_frame, text="Background Subtraction")
+        bg_frame.pack(side=tk.TOP, fill=tk.Y) # .pack is okay here
+        self.bg_subtract_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bg_frame, text="Enable", variable=self.bg_subtract_var).grid(row=0, column=0, columnspan=2, sticky='w', padx=5)
+        ttk.Label(bg_frame, text="BG Min:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        self.bg_time_min_var = tk.StringVar(value='-1.0')
+        ttk.Entry(bg_frame, textvariable=self.bg_time_min_var, width=8).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Label(bg_frame, text="BG Max:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        self.bg_time_max_var = tk.StringVar(value='0.0')
+        ttk.Entry(bg_frame, textvariable=self.bg_time_max_var, width=8).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        
+        # --- Group 3: Slicing Controls ---
         slice_frame = ttk.Frame(main_controls_frame)
+        slice_frame.grid(row=0, column=2, sticky='ns', padx=10)
+        self._create_slice_controls(slice_frame) # Uses grid
+
+        # --- Group 4: Window controls ---
+        win_frame = ttk.Frame(main_controls_frame)
+        win_frame.grid(row=0, column=3, sticky='ns', padx=10)
+        self._create_window_controls(win_frame) # Uses grid
+
+        # --- Group 5: Display controls ---
         display_frame = ttk.Frame(main_controls_frame)
+        display_frame.grid(row=0, column=4, sticky='ns', padx=10)
+        self._create_display_controls(display_frame) # Uses grid        
+      
+        # --- Group 6: Axis controls
         axis_frame = ttk.Frame(main_controls_frame)
-        window_frame = ttk.Frame(main_controls_frame)
-        
-        frames = [file_frame, slice_frame, display_frame, axis_frame, window_frame]
-        for frame in frames:
-            frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
+        axis_frame.grid(row=0, column=5, sticky='ns', padx=10)
+        self._create_axis_controls(axis_frame) # Uses grid        
 
-        self._create_file_loading_controls(file_frame)
-        self._create_slice_controls(slice_frame)
-        self._create_display_controls(display_frame)
-        self._create_axis_controls(axis_frame)
-        self._create_window_controls(window_frame)
+        # --- Group 7: Time Offsets ---
+        offset_frame = ttk.LabelFrame(main_controls_frame, text="Time Offsets (ps)")
+        offset_frame.grid(row=0, column=6, sticky='ns', padx=10)
+        self.time_offset_vars = {}
+        for i in range(1, 5):
+            self.time_offset_vars[i] = tk.StringVar(value='0.0')
+            ttk.Label(offset_frame, text=f"D{i}:").grid(row=i-1, column=0, sticky='w')
+            ttk.Entry(offset_frame, textvariable=self.time_offset_vars[i], width=6).grid(row=i-1, column=1, sticky='ew')
 
-        ttk.Button(main_controls_frame, text="Apply\nSettings", command=self.update_plots).pack(side=tk.RIGHT, padx=20, fill=tk.Y, expand=True)
+        # --- Group 8: Apply button ---
+        ttk.Button(main_controls_frame, text="Apply\nSettings", command=self.update_plots).grid(row=0, column=7, sticky='nsew', padx=(10, 0))
 
     def _create_file_loading_controls(self, parent_frame):
         raise NotImplementedError("This method must be implemented by a subclass.")
 
     def _create_slice_controls(self, parent_frame):
-        ttk.Label(parent_frame, text="Slice Selection", font="-weight bold").grid(row=0, column=0, columnspan=3, sticky='w')
+        # This frame will be placed with grid, so its children can use grid
+        sl_frame = ttk.Frame(parent_frame)
+        sl_frame.grid(row=0, column=0, sticky='ew') # Use grid
+        ttk.Label(sl_frame, text="Slice Selection", font="-weight bold").grid(row=0, column=0, columnspan=3, sticky='w')
         self.y_slice_idx, self.x_slice_idx = tk.IntVar(), tk.IntVar()
         self.y_slice_val, self.x_slice_val = tk.StringVar(value='2.00'), tk.StringVar(value='450.00')
         self.y_slice_idx.trace_add("write", self._on_slider_change)
         self.x_slice_idx.trace_add("write", self._on_slider_change)
-        ttk.Label(parent_frame, text="Time (Y):").grid(row=1, column=0, sticky='w')
-        y_entry = ttk.Entry(parent_frame, textvariable=self.y_slice_val, width=8)
+        ttk.Label(sl_frame, text="Time (Y):").grid(row=1, column=0, sticky='w')
+        y_entry = ttk.Entry(sl_frame, textvariable=self.y_slice_val, width=8)
         y_entry.grid(row=1, column=1)
-        self.slider_y = ttk.Scale(parent_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.y_slice_idx, length=150)
+        self.slider_y = ttk.Scale(sl_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.y_slice_idx, length=120)
         self.slider_y.grid(row=1, column=2, sticky='ew')
-        ttk.Label(parent_frame, text="Wavelength (X):").grid(row=2, column=0, sticky='w')
-        x_entry = ttk.Entry(parent_frame, textvariable=self.x_slice_val, width=8)
+        ttk.Label(sl_frame, text="Wave (X):").grid(row=2, column=0, sticky='w')
+        x_entry = ttk.Entry(sl_frame, textvariable=self.x_slice_val, width=8)
         x_entry.grid(row=2, column=1)
-        self.slider_x = ttk.Scale(parent_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.x_slice_idx, length=150)
+        self.slider_x = ttk.Scale(sl_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.x_slice_idx, length=120)
         self.slider_x.grid(row=2, column=2, sticky='ew')
         y_entry.bind("<Return>", lambda e: self._on_entry_change('y'))
         x_entry.bind("<Return>", lambda e: self._on_entry_change('x'))
     
     def _create_display_controls(self, parent_frame):
-        ttk.Label(parent_frame, text="Display Settings", font="-weight bold").grid(row=0, column=0, columnspan=2, sticky='w')
-        ttk.Label(parent_frame, text="Colormap:").grid(row=1, column=0, sticky='w')
+        # This frame will be placed with grid, so its children can use grid
+        disp_frame = ttk.Frame(parent_frame)
+        disp_frame.grid(row=0, column=0, sticky='ew') # Use grid
+        ttk.Label(disp_frame, text="Display Settings", font="-weight bold").grid(row=0, column=0, columnspan=2, sticky='w')
+        ttk.Label(disp_frame, text="Colormap:").grid(row=1, column=0, sticky='w')
         self.cmap_var = tk.StringVar(value='cmc.cork')
-        self.cmap_combo = ttk.Combobox(parent_frame, textvariable=self.cmap_var, values=['viridis'] + CRAMERI_CMAPS, width=12)
-        self.cmap_combo.grid(row=1, column=1, pady=2)
+        self.cmap_combo = ttk.Combobox(disp_frame, textvariable=self.cmap_var, values=['viridis'] + CRAMERI_CMAPS, width=12)
+        self.cmap_combo.grid(row=1, column=1, pady=2, sticky='w')
         self.smoothing_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(parent_frame, text="Enable Smoothing", variable=self.smoothing_var).grid(row=2, column=0, columnspan=2, sticky='w')
-        ttk.Label(parent_frame, text="Window:").grid(row=3, column=0, sticky='w')
+        ttk.Checkbutton(disp_frame, text="Enable Smoothing", variable=self.smoothing_var).grid(row=2, column=0, columnspan=2, sticky='w')
+        ttk.Label(disp_frame, text="Window:").grid(row=3, column=0, sticky='w')
         self.smooth_window = tk.StringVar(value='5')
-        ttk.Entry(parent_frame, textvariable=self.smooth_window, width=5).grid(row=3, column=1, sticky='w')
-        ttk.Label(parent_frame, text="Polyorder:").grid(row=4, column=0, sticky='w')
+        ttk.Entry(disp_frame, textvariable=self.smooth_window, width=5).grid(row=3, column=1, sticky='w')
+        ttk.Label(disp_frame, text="Polyorder:").grid(row=4, column=0, sticky='w')
         self.smooth_poly = tk.StringVar(value='2')
-        ttk.Entry(parent_frame, textvariable=self.smooth_poly, width=5).grid(row=4, column=1, sticky='w')
+        ttk.Entry(disp_frame, textvariable=self.smooth_poly, width=5).grid(row=4, column=1, sticky='w')
+
 
     def _create_axis_controls(self, parent_frame):
-        ttk.Label(parent_frame, text="Axis Scaling", font="-weight bold").grid(row=0, column=0, columnspan=2, sticky='w')
+        # This frame will be placed with grid, so its children can use grid
+        ax_frame = ttk.Frame(parent_frame)
+        ax_frame.grid(row=2, column=0, sticky='ew') # Use grid
+        ttk.Label(ax_frame, text="Axis Scaling", font="-weight bold").grid(row=0, column=0, columnspan=2, sticky='w')
         self.symlog_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(parent_frame, text="Symlog Time Axis", variable=self.symlog_var).grid(row=1, column=0, columnspan=2, sticky='w')
-        ttk.Label(parent_frame, text="Linthresh:").grid(row=2, column=0, sticky='w')
+        ttk.Checkbutton(ax_frame, text="Symlog Time Axis", variable=self.symlog_var).grid(row=1, column=0, columnspan=2, sticky='w')
+        ttk.Label(ax_frame, text="Linthresh:").grid(row=2, column=0, sticky='w')
         self.linthresh_var = tk.StringVar(value='1.0')
-        ttk.Entry(parent_frame, textvariable=self.linthresh_var, width=10).grid(row=2, column=1)
-        ttk.Label(parent_frame, text="Intensity Min:").grid(row=3, column=0, sticky='w')
+        ttk.Entry(ax_frame, textvariable=self.linthresh_var, width=10).grid(row=2, column=1, sticky='w')
+        ttk.Label(ax_frame, text="Intensity Min:").grid(row=3, column=0, sticky='w')
         self.slice_ymin_var = tk.StringVar(value='-15')
-        ttk.Entry(parent_frame, textvariable=self.slice_ymin_var, width=10).grid(row=3, column=1)
-        ttk.Label(parent_frame, text="Intensity Max:").grid(row=4, column=0, sticky='w')
+        ttk.Entry(ax_frame, textvariable=self.slice_ymin_var, width=10).grid(row=3, column=1, sticky='w')
+        ttk.Label(ax_frame, text="Intensity Max:").grid(row=4, column=0, sticky='w')
         self.slice_ymax_var = tk.StringVar(value='15')
-        ttk.Entry(parent_frame, textvariable=self.slice_ymax_var, width=10).grid(row=4, column=1)
+        ttk.Entry(ax_frame, textvariable=self.slice_ymax_var, width=10).grid(row=4, column=1, sticky='w')
         self.sync_color_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(parent_frame, text="Sync Color & Intensity", variable=self.sync_color_var).grid(row=5, column=0, columnspan=2, sticky='w')
+        ttk.Checkbutton(ax_frame, text="Sync Color & Intensity", variable=self.sync_color_var).grid(row=5, column=0, columnspan=2, sticky='w')
+
 
     def _create_window_controls(self, parent_frame):
-        ttk.Label(parent_frame, text="Data Window", font="-weight bold").grid(row=0, column=0, columnspan=2, sticky='w')
-        ttk.Label(parent_frame, text="Time Min:").grid(row=1, column=0, sticky='w')
+        # This frame will be placed with grid, so its children can use grid
+        win_frame = ttk.Frame(parent_frame)
+        win_frame.grid(row=2, column=0, sticky='ew') # Use grid
+        ttk.Label(win_frame, text="Data Window", font="-weight bold").grid(row=0, column=0, columnspan=2, sticky='w')
+        ttk.Label(win_frame, text="Time Min:").grid(row=1, column=0, sticky='w')
         self.time_min_var = tk.StringVar(value='0')
-        ttk.Entry(parent_frame, textvariable=self.time_min_var, width=8).grid(row=1, column=1)
-        ttk.Label(parent_frame, text="Time Max:").grid(row=2, column=0, sticky='w')
+        ttk.Entry(win_frame, textvariable=self.time_min_var, width=8).grid(row=1, column=1)
+        ttk.Label(win_frame, text="Time Max:").grid(row=2, column=0, sticky='w')
         self.time_max_var = tk.StringVar(value='20')
-        ttk.Entry(parent_frame, textvariable=self.time_max_var, width=8).grid(row=2, column=1)
-        ttk.Label(parent_frame, text="Wave Min:").grid(row=3, column=0, sticky='w')
+        ttk.Entry(win_frame, textvariable=self.time_max_var, width=8).grid(row=2, column=1)
+        ttk.Label(win_frame, text="Wave Min:").grid(row=3, column=0, sticky='w')
         self.wave_min_var = tk.StringVar(value='365')
-        ttk.Entry(parent_frame, textvariable=self.wave_min_var, width=8).grid(row=3, column=1)
-        ttk.Label(parent_frame, text="Wave Max:").grid(row=4, column=0, sticky='w')
+        ttk.Entry(win_frame, textvariable=self.wave_min_var, width=8).grid(row=3, column=1)
+        ttk.Label(win_frame, text="Wave Max:").grid(row=4, column=0, sticky='w')
         self.wave_max_var = tk.StringVar(value='812')
-        ttk.Entry(parent_frame, textvariable=self.wave_max_var, width=8).grid(row=4, column=1)
-        
-        # --- NEW: Background Subtraction Controls ---
-        bg_frame = ttk.LabelFrame(parent_frame, text="Background Subtraction")
-        bg_frame.grid(row=5, column=0, columnspan=2, pady=(10,0), sticky='ew')
-
-        self.bg_subtract_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bg_frame, text="Enable", variable=self.bg_subtract_var).grid(row=0, column=0, columnspan=2, sticky='w', padx=5)
-
-        ttk.Label(bg_frame, text="BG Min:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
-        self.bg_time_min_var = tk.StringVar(value='-1.0')
-        ttk.Entry(bg_frame, textvariable=self.bg_time_min_var, width=8).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
-
-        ttk.Label(bg_frame, text="BG Max:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
-        self.bg_time_max_var = tk.StringVar(value='0.0')
-        ttk.Entry(bg_frame, textvariable=self.bg_time_max_var, width=8).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
-
-        offset_frame = ttk.LabelFrame(parent_frame, text="Time Offsets (ps)")
-        # --- MODIFIED: Grid row index updated due to new controls ---
-        offset_frame.grid(row=6, column=0, columnspan=2, pady=(10,0))
-        self.time_offset_vars = {}
-        for i in range(1, 5):
-            self.time_offset_vars[i] = tk.StringVar(value='0.0')
-            ttk.Label(offset_frame, text=f"D{i}:").grid(row=i-1, column=0, sticky='w')
-            ttk.Entry(offset_frame, textvariable=self.time_offset_vars[i], width=8).grid(row=i-1, column=1, sticky='ew')
+        ttk.Entry(win_frame, textvariable=self.wave_max_var, width=8).grid(row=4, column=1)
 
     def _create_plot_canvases(self):
         canvas_frame = ttk.Frame(self.root, padding=(10,0))
         canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.fig_2d = plt.Figure(figsize=(10, 5))
+        # --- MODIFIED: Adjusted figure sizes for better layout ---
+        self.fig_2d = plt.Figure(figsize=(7, 4)) # Taller 2D plot
         self.canvas_2d = FigureCanvasTkAgg(self.fig_2d, master=canvas_frame)
         NavigationToolbar2Tk(self.canvas_2d, canvas_frame)
         self.canvas_2d.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.fig_slices = plt.Figure(figsize=(10, 4))
+        self.fig_slices = plt.Figure(figsize=(10, 5)) # Taller slice plots
         self.ax_slice_y, self.ax_slice_x = self.fig_slices.subplots(1, 2)
         self.canvas_slices = FigureCanvasTkAgg(self.fig_slices, master=canvas_frame)
         NavigationToolbar2Tk(self.canvas_slices, canvas_frame)
