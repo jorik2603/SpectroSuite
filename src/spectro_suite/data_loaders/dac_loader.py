@@ -46,5 +46,14 @@ class DacLoader(DataLoader):
              raise ValueError("The number of wavelength points does not match the number of intensity data points.")
         if z_data.shape[0] != len(y_axis):
             raise ValueError("The number of time points does not match the number of intensity data rows.")
+        
+        # --- MODIFICATION START ---
+        # Create a boolean mask for wavelengths between 525 and 550 (inclusive).
+        mask = (x_axis >= 525) & (x_axis <= 550)
 
+        # Use the mask to select and set the corresponding columns in z_data to zero.
+        # This efficiently updates all time points for the selected wavelengths.
+        z_data[:, mask] = np.min(z_data)
+        
+        # --- MODIFICATION END ---
         return x_axis, y_axis, z_data
